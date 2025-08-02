@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BackpackBattles チェス駒配置ツール</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .tool-layout {
+            display: grid;
+            grid-template-columns: 250px 1fr 250px;
+            gap: 30px;
+            align-items: start;
+        }
+
+        .piece-palette {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #e9ecef;
+        }
+
+        .palette-section {
+            margin-bottom: 25px;
+        }
+
+        .palette-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            text-align: center;
+        }
+
+        .piece-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .piece-item {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            cursor: grab;
+            transition: all 0.3s;
+            user-select: none;
+            position: relative;
+        }
+
+        .piece-item:hover {
+            border-color: #667eea;
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .piece-item:active {
+            cursor: grabbing;
+        }
+
+        .piece-symbol {
+            font-size: 32px;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .piece-name {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .white-piece {
+            color: #333;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+        }
+
+        .black-piece {
+            color: #000;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .chess-board {
+            background: #8B4513;
+            border-radius: 15px;
+            padding: 20px;
+            display: inline-block;
+            margin: 0 auto;
+        }
+
+        .board-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 60px);
+            grid-template-rows: repeat(7, 60px);
+            gap: 2px;
+        }
+
+        .board-cell {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #654321;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .board-cell.light {
+            background: #F0D9B5;
+        }
+
+        .board-cell.dark {
+            background: #B58863;
+        }
+
+        .board-cell.drag-over {
+            background: #FFE4B5 !important;
+            border: 3px solid #FF6B35 !important;
+            transform: scale(1.1);
+        }
+
+        .board-cell.occupied {
+            background: #E8F5E8;
+            border: 2px solid #28a745;
+        }
+
+        .board-cell.blocked {
+            background: #8B0000 !important;
+            border: 2px solid #FF4500 !important;
+            position: relative;
+        }
+
+        .blocked-marker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 30px;
+            color: #FFD700;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+
+        .placed-piece {
+            font-size: 40px;
+            cursor: grab;
+            transition: transform 0.2s;
+            user-select: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .placed-piece:hover {
+            transform: scale(1.2);
+        }
+
+        .placed-piece:active {
+            cursor: grabbing;
+        }
+
+        .placed-piece.dragging {
+            opacity: 0.5;
+            transform: scale(0.8);
+        }
+
+        .info-panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #e9ecef;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-title {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .piece-count {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            padding: 5px 10px;
+            background: white;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .clear-button {
+            width: 100%;
+            padding: 12px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 10px;
+        }
+
+        .clear-button:hover {
+            background: #c82333;
+        }
+
+        .score-controls {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: white;
+        }
+
+        .score-group {
+            margin-bottom: 20px;
+        }
+
+        .score-label {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+            text-align: center;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .piece-score-control {
+            display: grid;
+            grid-template-columns: auto 1fr 1fr;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .piece-icon {
+            font-size: 20px;
+            width: 30px;
+            text-align: center;
+        }
+
+        .score-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .score-input-label {
+            font-size: 10px;
+            color: #666;
+            text-align: center;
+        }
+
+        .score-input {
+            width: 100%;
+            padding: 4px 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .score-input:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+
+        .reset-button {
+            width: 100%;
+            padding: 8px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 10px;
+        }
+
+        .reset-button:hover {
+            background: #5a6268;
+        }
+
+        .coordinates {
+            position: absolute;
+            font-size: 10px;
+            color: #666;
+            top: 2px;
+            left: 2px;
+        }
+
+        .dragging-piece {
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            font-size: 40px;
+            transform: translate(-50%, -50%);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        @media (max-width: 1200px) {
+            .tool-layout {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .chess-board {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 BackpackBattles チェス駒配置ツール</h1>
+
+        <div class="tool-layout">
+            <!-- 左側: 駒パレット -->
+            <div class="piece-palette">
+                <div class="palette-section">
+                    <div class="palette-title">⚪ 白駒</div>
+                    <div class="piece-row">
+                        <div class="piece-item" draggable="true" data-piece="white-pawn">
+                            <span class="piece-symbol white-piece">♙</span>
+                            <span class="piece-name">ポーン</span>
+                        </div>
+                        <div class="piece-item" draggable="true" data-piece="white-knight">
+                            <span class="piece-symbol white-piece">♘</span>
+                            <span class="piece-name">ナイト</span>
+                        </div>
+                    </div>
+                    <div class="piece-row">
+                        <div class="piece-item" draggable="true" data-piece="white-bishop">
+                            <span class="piece-symbol white-piece">♗</span>
+                            <span class="piece-name">ビショップ</span>
+                        </div>
+                        <div class="piece-item" draggable="true" data-piece="white-rook">
+                            <span class="piece-symbol white-piece">♖</span>
+                            <span class="piece-name">ルーク</span>
+                        </div>
+                    </div>
+                    <div class="piece-row">
+                        <div class="piece-item" draggable="true" data-piece="white-queen">
+                            <span class="piece-symbol white-piece">♕</span>
+                            <span class="piece-name">クイーン</span>
+                        </div>
+                        <div class="piece-item" draggable="true" data-piece="white-king">
+                            <span class="piece-symbol white-piece">♔</span>
+                            <span class="piece-name">キング</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="palette-section">
+                    <div class="palette-title">⚫ 黒駒</div>
+                    <div class="piece-row">
+                        <div class="piece-item" draggable="true" data-piece="black-pawn">
+                            <span class="piece-symbol black-piece">♟</span>
+                            <span class="piece-name">ポーン</span>
+                        </div>
+                        <div class="piece-item" draggable="true" data-piece="black-knight">
+                            <span class="piece-symbol black-piece">♞</span>
+                            <span class="piece-name">ナイト</span>
+                        </div>
+                    </div>
+                    <div class="piece-row">
+                        <div class="piece-item" draggable="true" data-piece="black-bishop">
+                            <span class="piece-symbol black-piece">♝</span>
+                            <span class="piece-name">ビショップ</span>
+                        </div>
+                        <div class="piece-item" draggable="true" data-piece="black-rook">
+                            <span class="piece-symbol black-piece">♜</span>
+                            <span class="piece-name">ルーク</span>
+                        </div>
+                    </div>
+                    <div class="piece-row">
+                        <div class="piece-item" draggable="true" data-piece="black-queen">
+                            <span class="piece-symbol black-piece">♛</span>
+                            <span class="piece-name">クイーン</span>
+                        </div>
+                        <div class="piece-item" draggable="true" data-piece="black-king">
+                            <span class="piece-symbol black-piece">♚</span>
+                            <span class="piece-name">キング</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中央: チェスボード -->
+            <div class="chess-board">
+                <div class="board-grid" id="chessBoard">
+                    <!-- ボードはJavaScriptで生成 -->
+                </div>
+            </div>
+
+            <!-- 右側: 情報パネル -->
+            <div class="info-panel">
+                <div class="info-section">
+                    <div class="info-title">📊 配置統計</div>
+                    <div id="pieceStats">
+                        <!-- 統計情報はJavaScriptで更新 -->
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-title">⚖️ 効果値設定</div>
+                    <div class="score-controls">
+                        <div class="score-group">
+                            <div class="score-label">白駒設定</div>
+                            <div id="whiteScoreControls"></div>
+                        </div>
+                        <div class="score-group">
+                            <div class="score-label">黒駒設定</div>
+                            <div id="blackScoreControls"></div>
+                        </div>
+                        <button class="reset-button" onclick="resetScores()">🔄 デフォルトに戻す</button>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-title">🎯 操作方法</div>
+                    <div style="font-size: 14px; line-height: 1.6;">
+                        <p><strong>配置:</strong> 左の駒をボードにドラッグ</p>
+                        <p><strong>移動:</strong> ボード上の駒をドラッグ</p>
+                        <p><strong>削除:</strong> 駒をボード外にドラッグ</p>
+                        <p><strong>置換:</strong> 駒の上に別の駒をドロップ</p>
+                        <p><strong>ポーン回転:</strong> ポーンを右クリックで回転</p>
+                        <p><strong>進行不可:</strong> 空マスを中クリックで切替</p>
+                    </div>
+                </div>
+
+                <button class="clear-button" onclick="clearBoard()">🗑️ ボードをクリア</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ドラッグ中の駒表示用 -->
+    <div id="draggingPiece" class="dragging-piece" style="display: none;"></div>
+
+    <script>
+        // 駒の定義
+        const pieceSymbols = {
+            'white-pawn': '♙', 'white-knight': '♘', 'white-bishop': '♗',
+            'white-rook': '♖', 'white-queen': '♕', 'white-king': '♔',
+            'black-pawn': '♟', 'black-knight': '♞', 'black-bishop': '♝',
+            'black-rook': '♜', 'black-queen': '♛', 'black-king': '♚'
+        };
+
+        const pieceNames = {
+            'white-pawn': '白ポーン', 'white-knight': '白ナイト', 'white-bishop': '白ビショップ',
+            'white-rook': '白ルーク', 'white-queen': '白クイーン', 'white-king': '白キング',
+            'black-pawn': '黒ポーン', 'black-knight': '黒ナイト', 'black-bishop': '黒ビショップ',
+            'black-rook': '黒ルーク', 'black-queen': '黒クイーン', 'black-king': '黒キング'
+        };
+
+        // ボード状態
+        let board = Array(7).fill().map(() => Array(9).fill(null));
+        let blockedCells = new Set(); // "row,col" 形式で進行不可能セルを管理
+        let draggedPiece = null;
+        let draggedFromBoard = false;
+        let draggedFromCell = null;
+
+        // ポーンの向き管理（デフォルトは上向き）
+        let pawnDirections = {}; // key: "row,col", value: 0-3 (上、右、下、左)
+
+        // ボード初期化
+        function initializeBoard() {
+            const boardElement = document.getElementById('chessBoard');
+            boardElement.innerHTML = '';
+
+            for (let row = 0; row < 7; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = `board-cell ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+
+                    // 座標表示
+                    const coords = document.createElement('span');
+                    coords.className = 'coordinates';
+                    coords.textContent = `${row},${col}`;
+                    cell.appendChild(coords);
+
+                    // ドロップイベント
+                    cell.addEventListener('dragover', handleDragOver);
+                    cell.addEventListener('drop', handleDrop);
+                    cell.addEventListener('dragleave', handleDragLeave);
+
+                    // 右クリックイベント（ポーンの回転用）
+                    cell.addEventListener('contextmenu', handleRightClick);
+
+                    // 中クリックイベント（進行不可能設定用）
+                    cell.addEventListener('mousedown', handleMouseDown);
+
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        // パレットの駒にドラッグイベントを追加
+        function initializePalette() {
+            document.querySelectorAll('.piece-item').forEach(item => {
+                item.addEventListener('dragstart', handlePaletteDragStart);
+                item.addEventListener('dragend', handleDragEnd);
+            });
+        }
+
+        // パレットからのドラッグ開始
+        function handlePaletteDragStart(e) {
+            draggedPiece = e.target.dataset.piece;
+            draggedFromBoard = false;
+
+            const draggingElement = document.getElementById('draggingPiece');
+            draggingElement.textContent = pieceSymbols[draggedPiece];
+            draggingElement.className = `dragging-piece ${draggedPiece.includes('white') ? 'white-piece' : 'black-piece'}`;
+
+            e.dataTransfer.effectAllowed = 'copy';
+
+            // マウス追従
+            document.addEventListener('mousemove', followMouse);
+        }
+
+        // ボード上の駒のドラッグ開始
+        function handleBoardDragStart(e) {
+            const cell = e.target.closest('.board-cell');
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+
+            draggedPiece = board[row][col];
+            draggedFromBoard = true;
+            draggedFromCell = { row, col };
+
+            const draggingElement = document.getElementById('draggingPiece');
+            draggingElement.textContent = pieceSymbols[draggedPiece];
+            draggingElement.className = `dragging-piece ${draggedPiece.includes('white') ? 'white-piece' : 'black-piece'}`;
+
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+
+            document.addEventListener('mousemove', followMouse);
+        }
+
+        // マウス追従
+        function followMouse(e) {
+            const draggingElement = document.getElementById('draggingPiece');
+            draggingElement.style.display = 'block';
+            draggingElement.style.left = e.clientX + 'px';
+            draggingElement.style.top = e.clientY + 'px';
+        }
+
+        // ドラッグオーバー
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.target.closest('.board-cell').classList.add('drag-over');
+        }
+
+        // ドラッグリーブ
+        function handleDragLeave(e) {
+            e.target.closest('.board-cell').classList.remove('drag-over');
+        }
+
+        // ドロップ
+        function handleDrop(e) {
+            e.preventDefault();
+            const cell = e.target.closest('.board-cell');
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+
+            // 進行不可能セルには配置できない
+            if (isBlocked(row, col)) {
+                cell.classList.remove('drag-over');
+                return;
+            }
+
+            // 元の位置から駒を削除（ボードからの移動の場合）
+            if (draggedFromBoard && draggedFromCell) {
+                board[draggedFromCell.row][draggedFromCell.col] = null;
+                updateCellDisplay(draggedFromCell.row, draggedFromCell.col);
+            }
+
+            // 新しい位置に駒を配置
+            board[row][col] = draggedPiece;
+            updateCellDisplay(row, col);
+
+            cell.classList.remove('drag-over');
+            updateStats();
+        }
+
+        // ドラッグ終了
+        function handleDragEnd(e) {
+            document.removeEventListener('mousemove', followMouse);
+            document.getElementById('draggingPiece').style.display = 'none';
+
+            // ドラッグ中の表示をリセット
+            document.querySelectorAll('.board-cell').forEach(cell => {
+                cell.classList.remove('drag-over');
+            });
+
+            document.querySelectorAll('.placed-piece').forEach(piece => {
+                piece.classList.remove('dragging');
+            });
+
+            // ボード外にドロップした場合の削除処理
+            if (draggedFromBoard && draggedFromCell) {
+                const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+                if (!dropTarget || !dropTarget.closest('.board-cell')) {
+                    // ボード外にドロップ = 削除
+                    board[draggedFromCell.row][draggedFromCell.col] = null;
+                    updateCellDisplay(draggedFromCell.row, draggedFromCell.col);
+                    updateStats();
+                }
+            }
+
+            draggedPiece = null;
+            draggedFromBoard = false;
+            draggedFromCell = null;
+        }
+
+        // セルの表示を更新
+        function updateCellDisplay(row, col) {
+            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            const existingPiece = cell.querySelector('.placed-piece');
+            const existingBlocked = cell.querySelector('.blocked-marker');
+
+            if (existingPiece) {
+                existingPiece.remove();
+            }
+            if (existingBlocked) {
+                existingBlocked.remove();
+            }
+
+            // 進行不可能セルの表示
+            if (isBlocked(row, col)) {
+                const blockedMarker = document.createElement('span');
+                blockedMarker.className = 'blocked-marker';
+                blockedMarker.textContent = '⛔';
+                cell.appendChild(blockedMarker);
+                cell.classList.add('blocked');
+                cell.classList.remove('occupied');
+                return;
+            } else {
+                cell.classList.remove('blocked');
+            }
+
+            if (board[row][col]) {
+                const piece = board[row][col];
+                const pieceElement = document.createElement('span');
+                pieceElement.className = `placed-piece ${piece.includes('white') ? 'white-piece' : 'black-piece'}`;
+
+                // ポーンの場合は向きを反映した表示
+                if (piece.includes('pawn')) {
+                    const pawnKey = `${row},${col}`;
+                    const direction = pawnDirections[pawnKey] || 0;
+
+                    // ポーンの基本記号を使用
+                    pieceElement.textContent = pieceSymbols[piece];
+
+                    // 向きを視覚的に示すための回転
+                    const rotations = ['0deg', '90deg', '180deg', '270deg'];
+                    pieceElement.style.transform = `rotate(${rotations[direction]})`;
+                    pieceElement.style.transformOrigin = 'center';
+                    pieceElement.style.display = 'inline-block'; // 回転のために必要
+                } else {
+                    pieceElement.textContent = pieceSymbols[piece];
+                }
+
+                pieceElement.draggable = true;
+
+                pieceElement.addEventListener('dragstart', handleBoardDragStart);
+                pieceElement.addEventListener('dragend', handleDragEnd);
+
+                cell.appendChild(pieceElement);
+                cell.classList.add('occupied');
+            } else {
+                cell.classList.remove('occupied');
+            }
+        }
+
+        // 中クリックイベント（進行不可能設定）
+        function handleMouseDown(e) {
+            if (e.button === 1) { // 中クリック
+                e.preventDefault();
+                const cell = e.target.closest('.board-cell');
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+
+                toggleBlockedCell(row, col);
+            }
+        }
+
+        // 中クリックイベント（進行不可能設定）
+        function handleMouseDown(e) {
+            if (e.button === 1) { // 中クリック
+                e.preventDefault();
+                const cell = e.target.closest('.board-cell');
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+
+                toggleBlockedCell(row, col);
+            }
+        }
+
+        // 進行不可能セルの切り替え
+        function toggleBlockedCell(row, col) {
+            const cellKey = `${row},${col}`;
+
+            if (isBlocked(row, col)) {
+                // 進行不可能を解除
+                blockedCells.delete(cellKey);
+            } else {
+                // 駒がある場合は先に駒を削除
+                if (board[row][col]) {
+                    board[row][col] = null;
+                    // ポーンの向き情報も削除
+                    delete pawnDirections[cellKey];
+                }
+                // 進行不可能に設定
+                blockedCells.add(cellKey);
+            }
+
+            updateCellDisplay(row, col);
+            updateStats();
+        }
+
+        // 右クリックイベント（ポーンの回転）
+        function handleRightClick(e) {
+            e.preventDefault(); // コンテキストメニューを表示しない
+
+            const cell = e.target.closest('.board-cell');
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            const piece = board[row][col];
+
+            // ポーンの場合のみ回転処理
+            if (piece && piece.includes('pawn')) {
+                const pawnKey = `${row},${col}`;
+                const currentDirection = pawnDirections[pawnKey] || 0;
+
+                // 時計回りに回転（0→1→2→3→0）
+                pawnDirections[pawnKey] = (currentDirection + 1) % 4;
+
+                // 表示を更新
+                updateCellDisplay(row, col);
+
+                // 評価を再計算
+                updateStats();
+            }
+        }
+
+        // 駒の価値定義（デフォルト値）
+        const defaultPieceValues = {
+            'white-pawn': [1, 1], 'white-knight': [3, 3], 'white-bishop': [3, 3],
+            'white-rook': [5, 5], 'white-queen': [9, 9], 'white-king': [4, 4],
+            'black-pawn': [1, 1], 'black-knight': [3, 3], 'black-bishop': [3, 3],
+            'black-rook': [5, 5], 'black-queen': [9, 9], 'black-king': [4, 4]
+        };
+
+        // 現在の駒の価値（ユーザーが変更可能）
+        let pieceValues = JSON.parse(JSON.stringify(defaultPieceValues));
+
+        const pieceTypeNames = {
+            'pawn': 'ポーン',
+            'knight': 'ナイト',
+            'bishop': 'ビショップ',
+            'rook': 'ルーク',
+            'queen': 'クイーン',
+            'king': 'キング'
+        };
+
+        // スコア設定UIの初期化
+        function initializeScoreControls() {
+            const whiteContainer = document.getElementById('whiteScoreControls');
+            const blackContainer = document.getElementById('blackScoreControls');
+
+            const pieceTypes = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
+
+            pieceTypes.forEach(type => {
+                // 白駒用
+                const whiteDiv = document.createElement('div');
+                whiteDiv.className = 'piece-score-control';
+
+                if (type === 'king') {
+                    // キングは自軍効果の設定
+                    whiteDiv.innerHTML = `
+                        <div class="piece-icon white-piece">${pieceSymbols['white-' + type]}</div>
+                        <div class="score-input-group">
+                            <div class="score-input-label">取る時</div>
+                            <input type="number" class="score-input" id="white-${type}-capture"
+                                   value="${pieceValues['white-' + type][0]}" min="0" max="20" step="0.1"
+                                   onchange="updatePieceValue('white-${type}', 0, this.value)">
+                        </div>
+                        <div class="score-input-group">
+                            <div class="score-input-label">自軍効果</div>
+                            <input type="number" class="score-input" id="white-${type}-captured"
+                                   value="${pieceValues['white-' + type][1]}" min="0" max="20" step="0.1"
+                                   onchange="updatePieceValue('white-${type}', 1, this.value)">
+                        </div>
+                    `;
+                } else {
+                    whiteDiv.innerHTML = `
+                        <div class="piece-icon white-piece">${pieceSymbols['white-' + type]}</div>
+                        <div class="score-input-group">
+                            <div class="score-input-label">取る時</div>
+                            <input type="number" class="score-input" id="white-${type}-capture"
+                                   value="${pieceValues['white-' + type][0]}" min="0" max="20" step="0.1"
+                                   onchange="updatePieceValue('white-${type}', 0, this.value)">
+                        </div>
+                        <div class="score-input-group">
+                            <div class="score-input-label">取られる時</div>
+                            <input type="number" class="score-input" id="white-${type}-captured"
+                                   value="${pieceValues['white-' + type][1]}" min="0" max="20" step="0.1"
+                                   onchange="updatePieceValue('white-${type}', 1, this.value)">
+                        </div>
+                    `;
+                }
+                whiteContainer.appendChild(whiteDiv);
+
+                // 黒駒用
+                const blackDiv = document.createElement('div');
+                blackDiv.className = 'piece-score-control';
+
+                if (type === 'king') {
+                    // キングは自軍効果の設定
+                    blackDiv.innerHTML = `
+                        <div class="piece-icon black-piece">${pieceSymbols['black-' + type]}</div>
+                        <div class="score-input-group">
+                            <div class="score-input-label">取る時</div>
+                            <input type="number" class="score-input" id="black-${type}-capture"
+                                   value="${pieceValues['black-' + type][0]}" min="0" max="20" step="0.1"
+                                   onchange="updatePieceValue('black-${type}', 0, this.value)">
+                        </div>
+                        <div class="score-input-group">
+                            <div class="score-input-label">自軍効果</div>
+                            <input type="number" class="score-input" id="black-${type}-captured"
+                                   value="${pieceValues['black-' + type][1]}" min="0" max="20" step="0.1"
+                                   onchange="updatePieceValue('black-${type}', 1, this.value)">
+                        </div>
+                    `;
+                } else {
+                    blackDiv.innerHTML = `
+                        <div class="piece-icon black-piece">${pieceSymbols['black-' + type]}</div>
+                        <div class="score-input-group">
+                            <div class="score-input-label">取る時</div>
+                            <input type="number" class="score-input" id="black-${type}-capture"
+                                   value="${pieceValues['black-' + type][0]}" min="0" max="20" step="0.1"
+                                   onchange="updatePieceValue('black-${type}', 0, this.value)">
+                        </div>
+                        <div class="score-input-group">
+                            <div class="score-input-label">取られる時</div>
+                            <input type="number" class="score-input" id="black-${type}-captured"
+                                   value="${pieceValues['black-' + type][1]}" min="0" max="20" step="0.1"
+                                   onchange="updatePieceValue('black-${type}', 1, this.value)">
+                        </div>
+                    `;
+                }
+                blackContainer.appendChild(blackDiv);
+            });
+        }
+
+        // 駒の価値更新
+        function updatePieceValue(pieceKey, valueIndex, newValue) {
+            const value = parseFloat(newValue) || 0;
+            pieceValues[pieceKey][valueIndex] = value;
+            updateStats(); // 統計を再計算
+        }
+
+        // スコアをデフォルトにリセット
+        function resetScores() {
+            if (confirm('効果値をデフォルトに戻しますか？')) {
+                pieceValues = JSON.parse(JSON.stringify(defaultPieceValues));
+
+                // UI更新
+                Object.keys(pieceValues).forEach(pieceKey => {
+                    const [color, type] = pieceKey.split('-');
+                    document.getElementById(`${color}-${type}-capture`).value = pieceValues[pieceKey][0];
+                    document.getElementById(`${color}-${type}-captured`).value = pieceValues[pieceKey][1];
+                });
+
+                updateStats();
+            }
+        }
+
+        // 駒の移動パターン取得
+        function getPossibleMoves(piece, row, col) {
+            const moves = [];
+            const pieceType = piece.split('-')[1];
+
+            switch (pieceType) {
+                case 'pawn':
+                    // ポーン: 向きに応じた斜め前2方向
+                    const pawnKey = `${row},${col}`;
+                    const direction = pawnDirections[pawnKey] || 0; // デフォルトは上向き
+
+                    // 向きごとの斜め前方向定義
+                    const pawnDirectionMoves = [
+                        [[-1, -1], [-1, 1]], // 上向き
+                        [[1, 1], [-1, 1]],   // 右向き
+                        [[1, -1], [1, 1]],   // 下向き
+                        [[-1, -1], [1, -1]]  // 左向き
+                    ];
+
+                    const pawnMoves = pawnDirectionMoves[direction];
+                    pawnMoves.forEach(([dr, dc]) => {
+                        const newRow = row + dr;
+                        const newCol = col + dc;
+                        if (isValidPosition(newRow, newCol) && !isBlocked(newRow, newCol)) {
+                            const targetPiece = board[newRow][newCol];
+                            if (!targetPiece || getColor(targetPiece) !== getColor(piece)) {
+                                moves.push([newRow, newCol]);
+                            }
+                        }
+                    });
+                    break;
+
+                case 'knight':
+                    // ナイト: L字移動
+                    const knightMoves = [[-2,-1], [-2,1], [-1,-2], [-1,2], [1,-2], [1,2], [2,-1], [2,1]];
+                    knightMoves.forEach(([dr, dc]) => {
+                        const newRow = row + dr;
+                        const newCol = col + dc;
+                        if (isValidPosition(newRow, newCol) && !isBlocked(newRow, newCol)) {
+                            const targetPiece = board[newRow][newCol];
+                            if (!targetPiece || getColor(targetPiece) !== getColor(piece)) {
+                                moves.push([newRow, newCol]);
+                            }
+                        }
+                    });
+                    break;
+
+                case 'bishop':
+                    // ビショップ: 斜め
+                    addSlidingMoves(moves, row, col, [[-1,-1], [-1,1], [1,-1], [1,1]], piece);
+                    break;
+
+                case 'rook':
+                    // ルーク: 前後左右
+                    addSlidingMoves(moves, row, col, [[-1,0], [1,0], [0,-1], [0,1]], piece);
+                    break;
+
+                case 'queen':
+                    // クイーン: 全方向
+                    addSlidingMoves(moves, row, col, [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]], piece);
+                    break;
+
+                case 'king':
+                    // キング: 全方向1マス
+                    const kingMoves = [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]];
+                    kingMoves.forEach(([dr, dc]) => {
+                        const newRow = row + dr;
+                        const newCol = col + dc;
+                        if (isValidPosition(newRow, newCol) && !isBlocked(newRow, newCol)) {
+                            const targetPiece = board[newRow][newCol];
+                            if (!targetPiece || getColor(targetPiece) !== getColor(piece)) {
+                                moves.push([newRow, newCol]);
+                            }
+                        }
+                    });
+                    break;
+            }
+
+            return moves;
+        }
+
+        function addSlidingMoves(moves, row, col, directions, piece) {
+            directions.forEach(([dr, dc]) => {
+                for (let i = 1; i < 9; i++) {
+                    const newRow = row + dr * i;
+                    const newCol = col + dc * i;
+
+                    // 盤面外なら停止
+                    if (!isValidPosition(newRow, newCol)) break;
+
+                    // 進行不可能マスには移動できないが、通過は可能
+                    if (!isBlocked(newRow, newCol)) {
+                        moves.push([newRow, newCol]);
+                    }
+                    // 駒があっても飛び越えて移動可能（BackpackBattlesルール）
+                }
+            });
+        }
+
+        function isValidPosition(row, col) {
+            return row >= 0 && row < 7 && col >= 0 && col < 9;
+        }
+
+        function isBlocked(row, col) {
+            return blockedCells.has(`${row},${col}`);
+        }
+
+        function getColor(piece) {
+            return piece ? piece.split('-')[0] : null;
+        }
+
+        function getOppositeColor(color) {
+            return color === 'white' ? 'black' : 'white';
+        }
+
+        // 盤面評価関数
+        function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 2, firstCapture = null) {
+            if (depth >= maxDepth) return 0;
+
+            const currentBoard = boardState || board;
+            let totalScore = 0;
+            let candidateNum = 0;
+
+            // 初回戦闘フラグの初期化（個別駒ごと）
+            if (firstCapture === null) {
+                firstCapture = new Set();
+            }
+
+            // 指定色の全駒について評価
+            for (let row = 0; row < 7; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const piece = currentBoard[row][col];
+                    if (!piece || getColor(piece) !== turn) continue;
+
+                    const moves = getPossibleMoves(piece, row, col);
+
+                    for (const [newRow, newCol] of moves) {
+                        const eliminatePiece = currentBoard[newRow][newCol];
+                        if (eliminatePiece) {
+                            candidateNum++;
+
+                            // スコア計算
+                            let score = 0;
+
+                            // 取る駒の基本効果
+                            score += pieceValues[piece][0];
+
+                            // キングは取られる効果なし、その他は取られる効果あり
+                            if (!eliminatePiece.includes('king')) {
+                                score += pieceValues[eliminatePiece][1];
+                            }
+
+                            // キングの自軍効果をチェック
+                            let countKingSupport = countAllyKings(currentBoard, getColor(piece));
+
+                            if (countKingSupport > 0) {
+                                // キングの自軍効果を追加
+                                const kingPiece = getColor(piece) === 'white' ? 'white-king' : 'black-king';
+                                const kingBonus = countKingSupport * pieceValues[kingPiece][1]; // キングの自軍効果は[1]に設定
+
+                                // 個別駒の初回戦闘の場合は2倍
+                                const firstCaptureKey = `${piece}-${row}-${col}`;
+                                if (!firstCapture.has(firstCaptureKey)) {
+                                    score += kingBonus * 2;
+                                    // 新しいSetを作成して状態を更新
+                                    const newFirstCapture = new Set(firstCapture);
+                                    newFirstCapture.add(firstCaptureKey);
+
+                                    // 盤面をコピーして移動シミュレーション
+                                    const newBoard = currentBoard.map(row => [...row]);
+                                    newBoard[newRow][newCol] = piece;
+                                    newBoard[row][col] = null;
+
+                                    // 再帰評価（更新された初回戦闘フラグを引き継ぎ）
+                                    score += evaluateBoard(newBoard, depth + 1, getOppositeColor(turn), maxDepth, newFirstCapture);
+                                } else {
+                                    score += kingBonus;
+
+                                    // 盤面をコピーして移動シミュレーション
+                                    const newBoard = currentBoard.map(row => [...row]);
+                                    newBoard[newRow][newCol] = piece;
+                                    newBoard[row][col] = null;
+
+                                    // 再帰評価
+                                    score += evaluateBoard(newBoard, depth + 1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+                                }
+                            } else {
+                                // キングサポートなしの場合
+                                // 盤面をコピーして移動シミュレーション
+                                const newBoard = currentBoard.map(row => [...row]);
+                                newBoard[newRow][newCol] = piece;
+                                newBoard[row][col] = null;
+
+                                // 再帰評価
+                                score += evaluateBoard(newBoard, depth + 1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+                            }
+
+                            totalScore += score;
+                        }
+                    }
+                }
+            }
+
+            if (candidateNum > 0) {
+                totalScore /= candidateNum;
+            }
+
+            return totalScore;
+        }
+
+        // 自軍キングの数をカウント
+        function countAllyKings(boardState, color) {
+            let kingCount = 0;
+            // 盤面全体で自軍キングを探索
+            for (let r = 0; r < 7; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const piece = boardState[r][c];
+                    if (piece && piece.includes('king') && getColor(piece) === color) {
+                        kingCount++;
+                    }
+                }
+            }
+            return kingCount;
+        }
+
+        // 統計更新
+        function updateStats() {
+            const stats = {};
+            const colors = { white: 0, black: 0 };
+
+            // 駒をカウント
+            for (let row = 0; row < 7; row++) {
+                for (let col = 0; col < 9; col++) {
+                    if (board[row][col]) {
+                        const piece = board[row][col];
+                        stats[piece] = (stats[piece] || 0) + 1;
+
+                        if (piece.includes('white')) colors.white++;
+                        else colors.black++;
+                    }
+                }
+            }
+
+            // 盤面評価スコア計算（白手番開始）
+            const boardScore = evaluateBoard(null, 0, 'white', 2);
+
+            // 統計表示を更新
+            const statsElement = document.getElementById('pieceStats');
+            let html = '';
+
+            // 色別統計
+            html += `<div class="piece-count"><strong>白駒総数:</strong> <span>${colors.white}</span></div>`;
+            html += `<div class="piece-count"><strong>黒駒総数:</strong> <span>${colors.black}</span></div>`;
+            html += `<div class="piece-count"><strong>バランス差:</strong> <span>${Math.abs(colors.white - colors.black)}</span></div>`;
+
+            html += '<hr style="margin: 10px 0;">';
+
+            // 盤面評価スコア
+            html += `<div class="piece-count"><strong>盤面評価:</strong> <span>${boardScore.toFixed(1)}</span></div>`;
+
+            html += '<hr style="margin: 10px 0;">';
+
+            // 個別駒統計
+            Object.keys(pieceNames).forEach(piece => {
+                if (stats[piece]) {
+                    html += `<div class="piece-count">
+                        <span>${pieceNames[piece]}:</span>
+                        <span>${stats[piece]}</span>
+                    </div>`;
+                }
+            });
+
+            statsElement.innerHTML = html;
+        }
+
+        // ボードクリア
+        function clearBoard() {
+            if (confirm('ボードをクリアしますか？')) {
+                board = Array(7).fill().map(() => Array(9).fill(null));
+                blockedCells.clear(); // 進行不可能セル情報をクリア
+                pawnDirections = {}; // ポーンの向き情報もクリア
+
+                document.querySelectorAll('.board-cell').forEach(cell => {
+                    const piece = cell.querySelector('.placed-piece');
+                    const blocked = cell.querySelector('.blocked-marker');
+                    if (piece) piece.remove();
+                    if (blocked) blocked.remove();
+                    cell.classList.remove('occupied', 'blocked');
+                });
+
+                updateStats();
+            }
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeBoard();
+            initializePalette();
+            initializeScoreControls();
+            updateStats();
+        });
+    </script>
+</body>
+</html>
