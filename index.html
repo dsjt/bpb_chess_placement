@@ -195,6 +195,7 @@
         }
 
         .info-panel {
+            min-width:280px;
             background: #f8f9fa;
             border-radius: 10px;
             padding: 20px;
@@ -240,7 +241,7 @@
         }
 
         .score-controls {
-            max-height: 300px;
+            max-height: 1200px;
             overflow-y: auto;
             border: 1px solid #ddd;
             border-radius: 8px;
@@ -341,7 +342,7 @@
 
         @media (max-width: 1200px) {
             .tool-layout {
-                grid-template-columns: 1fr;
+                grid-template-columns: 300px 1fr 300px;
                 gap: 20px;
             }
 
@@ -444,7 +445,7 @@
                 </div>
 
                 <div class="info-section">
-                    <div class="info-title">⚖️ 効果値設定</div>
+                    <div class="info-title">⚖️ スコア設定</div>
                     <div class="score-controls">
                         <div class="score-group">
                             <div class="score-label">白駒設定</div>
@@ -615,6 +616,21 @@
 
             // 元の位置から駒を削除（ボードからの移動の場合）
             if (draggedFromBoard && draggedFromCell) {
+                // **ID移行処理を追加**
+                const fromKey = `${draggedFromCell.row},${draggedFromCell.col}`;
+                const toKey = `${row},${col}`;
+
+                // 移動元にIDがあれば移動先に移行
+                if (pieceIds[fromKey]) {
+                    pieceIds[toKey] = pieceIds[fromKey];
+                    delete pieceIds[fromKey];
+
+                    // ポーンの向き情報も一緒に移行
+                    if (pawnDirections[fromKey]) {
+                        pawnDirections[toKey] = pawnDirections[fromKey];
+                        delete pawnDirections[fromKey];
+                    }
+                }
                 board[draggedFromCell.row][draggedFromCell.col] = null;
                 updateCellDisplay(draggedFromCell.row, draggedFromCell.col);
             }
@@ -688,6 +704,13 @@
                 const pieceElement = document.createElement('span');
                 pieceElement.className = `placed-piece ${piece.includes('white') ? 'white-piece' : 'black-piece'}`;
 
+                const cellKey = `${row},${col}`;
+
+                // 新規配置の場合のみID付与
+                if (!pieceIds[cellKey]) {
+                    pieceIds[cellKey] = ++pieceIdCounter;
+                }
+
                 // ポーンの場合は向きを反映した表示
                 if (piece.includes('pawn')) {
                     const pawnKey = `${row},${col}`;
@@ -713,7 +736,32 @@
                 cell.appendChild(pieceElement);
                 cell.classList.add('occupied');
             } else {
+                // 駒が削除された場合はIDも削除
+                const cellKey = `${row},${col}`;
+                delete pieceIds[cellKey];
+
                 cell.classList.remove('occupied');
+            }
+        }
+        let pieceIdCounter = 0;
+        let pieceIds = {}; // (row,col) -> unique_id のマッピング
+
+        function assignPieceId(row, col) {
+            const key = `${row},${col}`;
+            if (!pieceIds[key]) {
+                pieceIds[key] = ++pieceIdCounter;
+            }
+            return pieceIds[key];
+        }
+
+        function movePieceWithId(fromRow, fromCol, toRow, toCol) {
+            const fromKey = `${fromRow},${fromCol}`;
+            const toKey = `${toRow},${toCol}`;
+
+            // IDを新しい位置に移行
+            if (pieceIds[fromKey]) {
+                pieceIds[toKey] = pieceIds[fromKey];
+                delete pieceIds[fromKey];
             }
         }
 
@@ -791,9 +839,9 @@
         // 駒の価値定義（デフォルト値）
         const defaultPieceValues = {
             'white-pawn': [1, 1], 'white-knight': [3, 3], 'white-bishop': [3, 3],
-            'white-rook': [5, 5], 'white-queen': [9, 9], 'white-king': [4, 4],
+            'white-rook': [5, 5], 'white-queen': [9, 9], 'white-king': [4, 2],
             'black-pawn': [1, 1], 'black-knight': [3, 3], 'black-bishop': [3, 3],
-            'black-rook': [5, 5], 'black-queen': [9, 9], 'black-king': [4, 4]
+            'black-rook': [5, 5], 'black-queen': [9, 9], 'black-king': [4, 2]
         };
 
         // 現在の駒の価値（ユーザーが変更可能）
@@ -827,13 +875,13 @@
                         <div class="score-input-group">
                             <div class="score-input-label">取る時</div>
                             <input type="number" class="score-input" id="white-${type}-capture"
-                                   value="${pieceValues['white-' + type][0]}" min="0" max="20" step="0.1"
+                                   value="${pieceValues['white-' + type][0]}" min="0" max="20" step="1"
                                    onchange="updatePieceValue('white-${type}', 0, this.value)">
                         </div>
                         <div class="score-input-group">
                             <div class="score-input-label">自軍効果</div>
                             <input type="number" class="score-input" id="white-${type}-captured"
-                                   value="${pieceValues['white-' + type][1]}" min="0" max="20" step="0.1"
+                                   value="${pieceValues['white-' + type][1]}" min="0" max="20" step="1"
                                    onchange="updatePieceValue('white-${type}', 1, this.value)">
                         </div>
                     `;
@@ -843,13 +891,13 @@
                         <div class="score-input-group">
                             <div class="score-input-label">取る時</div>
                             <input type="number" class="score-input" id="white-${type}-capture"
-                                   value="${pieceValues['white-' + type][0]}" min="0" max="20" step="0.1"
+                                   value="${pieceValues['white-' + type][0]}" min="0" max="20" step="1"
                                    onchange="updatePieceValue('white-${type}', 0, this.value)">
                         </div>
                         <div class="score-input-group">
                             <div class="score-input-label">取られる時</div>
                             <input type="number" class="score-input" id="white-${type}-captured"
-                                   value="${pieceValues['white-' + type][1]}" min="0" max="20" step="0.1"
+                                   value="${pieceValues['white-' + type][1]}" min="0" max="20" step="1"
                                    onchange="updatePieceValue('white-${type}', 1, this.value)">
                         </div>
                     `;
@@ -867,13 +915,13 @@
                         <div class="score-input-group">
                             <div class="score-input-label">取る時</div>
                             <input type="number" class="score-input" id="black-${type}-capture"
-                                   value="${pieceValues['black-' + type][0]}" min="0" max="20" step="0.1"
+                                   value="${pieceValues['black-' + type][0]}" min="0" max="20" step="1"
                                    onchange="updatePieceValue('black-${type}', 0, this.value)">
                         </div>
                         <div class="score-input-group">
                             <div class="score-input-label">自軍効果</div>
                             <input type="number" class="score-input" id="black-${type}-captured"
-                                   value="${pieceValues['black-' + type][1]}" min="0" max="20" step="0.1"
+                                   value="${pieceValues['black-' + type][1]}" min="0" max="20" step="1"
                                    onchange="updatePieceValue('black-${type}', 1, this.value)">
                         </div>
                     `;
@@ -883,13 +931,13 @@
                         <div class="score-input-group">
                             <div class="score-input-label">取る時</div>
                             <input type="number" class="score-input" id="black-${type}-capture"
-                                   value="${pieceValues['black-' + type][0]}" min="0" max="20" step="0.1"
+                                   value="${pieceValues['black-' + type][0]}" min="0" max="20" step="1"
                                    onchange="updatePieceValue('black-${type}', 0, this.value)">
                         </div>
                         <div class="score-input-group">
                             <div class="score-input-label">取られる時</div>
                             <input type="number" class="score-input" id="black-${type}-captured"
-                                   value="${pieceValues['black-' + type][1]}" min="0" max="20" step="0.1"
+                                   value="${pieceValues['black-' + type][1]}" min="0" max="20" step="1"
                                    onchange="updatePieceValue('black-${type}', 1, this.value)">
                         </div>
                     `;
@@ -1036,13 +1084,29 @@
             return color === 'white' ? 'black' : 'white';
         }
 
+        function logAllPieces(currentBoard) {
+            console.log("=== 現在の盤面の駒一覧 ===");
+
+            for (let row = 0; row < 7; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const piece = currentBoard[row][col];
+                    if (piece) {
+                        console.log(`${piece} at (${row}, ${col})`);
+                    }
+                }
+            }
+        }
+
         // 盤面評価関数
-        function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 2, firstCapture = null) {
+        function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 3, firstCapture = null) {
             if (depth >= maxDepth) return 0;
 
             const currentBoard = boardState || board;
             let totalScore = 0;
             let candidateNum = 0;
+
+            console.log("depth=",depth)
+            logAllPieces(currentBoard)
 
             // 初回戦闘フラグの初期化（個別駒ごと）
             if (firstCapture === null) {
@@ -1082,8 +1146,11 @@
                                 const kingBonus = countKingSupport * pieceValues[kingPiece][1]; // キングの自軍効果は[1]に設定
 
                                 // 個別駒の初回戦闘の場合は2倍
-                                const firstCaptureKey = `${piece}-${row}-${col}`;
-                                if (!firstCapture.has(firstCaptureKey)) {
+                                const cellKey = `${row},${col}`;
+                                const pieceId = pieceIds[cellKey];
+                                const firstCaptureKey = `${pieceId}`;
+
+                                if (pieceId && !firstCapture.has(firstCaptureKey)) {
                                     score += kingBonus * 2;
                                     // 新しいSetを作成して状態を更新
                                     const newFirstCapture = new Set(firstCapture);
@@ -1095,7 +1162,7 @@
                                     newBoard[row][col] = null;
 
                                     // 再帰評価（更新された初回戦闘フラグを引き継ぎ）
-                                    score += evaluateBoard(newBoard, depth + 1, getOppositeColor(turn), maxDepth, newFirstCapture);
+                                    score += evaluateBoard(newBoard, depth, getOppositeColor(turn), maxDepth, newFirstCapture);
                                 } else {
                                     score += kingBonus;
 
@@ -1105,7 +1172,7 @@
                                     newBoard[row][col] = null;
 
                                     // 再帰評価
-                                    score += evaluateBoard(newBoard, depth + 1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+                                    score += evaluateBoard(newBoard, depth, getOppositeColor(turn), maxDepth, new Set(firstCapture));
                                 }
                             } else {
                                 // キングサポートなしの場合
@@ -1115,7 +1182,7 @@
                                 newBoard[row][col] = null;
 
                                 // 再帰評価
-                                score += evaluateBoard(newBoard, depth + 1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+                                score += evaluateBoard(newBoard, depth, getOppositeColor(turn), maxDepth, new Set(firstCapture));
                             }
 
                             totalScore += score;
@@ -1124,8 +1191,36 @@
                 }
             }
 
+            console.log("candidateNum=",candidateNum)
             if (candidateNum > 0) {
                 totalScore /= candidateNum;
+                return totalScore
+            }
+
+            // 取得できる移動先がない場合
+            // ランダムに移動
+            // 指定色の全駒について評価
+            for (let row = 0; row < 7; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const piece = currentBoard[row][col];
+                    if (!piece || getColor(piece) !== turn) continue;
+
+                    const moves = getPossibleMoves(piece, row, col);
+
+                    for (const [newRow, newCol] of moves) {
+                        candidateNum++;
+
+                        // 盤面をコピーして移動シミュレーション
+                        const newBoard = currentBoard.map(row => [...row]);
+                        newBoard[newRow][newCol] = piece;
+                        newBoard[row][col] = null;
+
+                        // 再帰評価
+                        let score = 0;
+                        score += evaluateBoard(newBoard, depth+1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+                        totalScore += score;
+                    }
+                }
             }
 
             return totalScore;
@@ -1165,7 +1260,7 @@
             }
 
             // 盤面評価スコア計算（白手番開始）
-            const boardScore = evaluateBoard(null, 0, 'white', 2);
+            const boardScore = evaluateBoard(null, 0, 'white', 3);
 
             // 統計表示を更新
             const statsElement = document.getElementById('pieceStats');
@@ -1202,6 +1297,10 @@
                 board = Array(7).fill().map(() => Array(9).fill(null));
                 blockedCells.clear(); // 進行不可能セル情報をクリア
                 pawnDirections = {}; // ポーンの向き情報もクリア
+
+                // **駒ID情報をクリア**
+                pieceIds = {};
+                pieceIdCounter = 0; // カウンターもリセット
 
                 document.querySelectorAll('.board-cell').forEach(cell => {
                     const piece = cell.querySelector('.placed-piece');
