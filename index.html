@@ -970,7 +970,7 @@
         }
 
         // 駒の移動パターン取得
-        function getPossibleMoves(piece, row, col) {
+        function getPossibleMoves(piece, row, col, currentBoard = board, currentPawnDirections = pawnDirections) {
             const moves = [];
             const pieceType = piece.split('-')[1];
 
@@ -978,7 +978,7 @@
                 case 'pawn':
                     // ポーン: 向きに応じた斜め前2方向
                     const pawnKey = `${row},${col}`;
-                    const direction = pawnDirections[pawnKey] || 0; // デフォルトは上向き
+                    const direction = currentPawnDirections[pawnKey] || 0; // デフォルトは上向き
 
                     // 向きごとの斜め前方向定義
                     const pawnDirectionMoves = [
@@ -993,7 +993,7 @@
                         const newRow = row + dr;
                         const newCol = col + dc;
                         if (isValidPosition(newRow, newCol) && !isBlocked(newRow, newCol)) {
-                            const targetPiece = board[newRow][newCol];
+                            const targetPiece = currentBoard[newRow][newCol];
                             if (!targetPiece || getColor(targetPiece) !== getColor(piece)) {
                                 moves.push([newRow, newCol]);
                             }
@@ -1008,7 +1008,7 @@
                         const newRow = row + dr;
                         const newCol = col + dc;
                         if (isValidPosition(newRow, newCol) && !isBlocked(newRow, newCol)) {
-                            const targetPiece = board[newRow][newCol];
+                            const targetPiece = currentBoard[newRow][newCol];
                             if (!targetPiece || getColor(targetPiece) !== getColor(piece)) {
                                 moves.push([newRow, newCol]);
                             }
@@ -1018,17 +1018,17 @@
 
                 case 'bishop':
                     // ビショップ: 斜め
-                    addSlidingMoves(moves, row, col, [[-1,-1], [-1,1], [1,-1], [1,1]], piece);
+                addSlidingMoves(moves, row, col, [[-1,-1], [-1,1], [1,-1], [1,1]], piece, currentBoard);
                     break;
 
                 case 'rook':
                     // ルーク: 前後左右
-                    addSlidingMoves(moves, row, col, [[-1,0], [1,0], [0,-1], [0,1]], piece);
+                addSlidingMoves(moves, row, col, [[-1,0], [1,0], [0,-1], [0,1]], piece, currentBoard);
                     break;
 
                 case 'queen':
                     // クイーン: 全方向
-                    addSlidingMoves(moves, row, col, [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]], piece);
+                addSlidingMoves(moves, row, col, [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]], piece, currentBoard);
                     break;
 
                 case 'king':
@@ -1038,7 +1038,7 @@
                         const newRow = row + dr;
                         const newCol = col + dc;
                         if (isValidPosition(newRow, newCol) && !isBlocked(newRow, newCol)) {
-                            const targetPiece = board[newRow][newCol];
+                            const targetPiece = currentBoard[newRow][newCol];
                             if (!targetPiece || getColor(targetPiece) !== getColor(piece)) {
                                 moves.push([newRow, newCol]);
                             }
@@ -1050,7 +1050,7 @@
             return moves;
         }
 
-        function addSlidingMoves(moves, row, col, directions, piece) {
+        function addSlidingMoves(moves, row, col, directions, piece, currentBoard = board) {
             directions.forEach(([dr, dc]) => {
                 for (let i = 1; i < 9; i++) {
                     const newRow = row + dr * i;
@@ -1061,7 +1061,10 @@
 
                     // 進行不可能マスには移動できないが、通過は可能
                     if (!isBlocked(newRow, newCol)) {
-                        moves.push([newRow, newCol]);
+                        const targetPiece = currentBoard[newRow][newCol];
+                        if (!targetPiece || getColor(targetPiece) !== getColor(piece)) {
+                            moves.push([newRow, newCol]);
+                        }
                     }
                     // 駒があっても飛び越えて移動可能（BackpackBattlesルール）
                 }
@@ -1086,7 +1089,6 @@
 
         function logAllPieces(currentBoard) {
             console.log("=== 現在の盤面の駒一覧 ===");
-
             for (let row = 0; row < 7; row++) {
                 for (let col = 0; col < 9; col++) {
                     const piece = currentBoard[row][col];
@@ -1098,15 +1100,13 @@
         }
 
         // 盤面評価関数
-        function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 3, firstCapture = null) {
+        function evaluateBoard(boardState = null, pawnState = null, depth = 0, turn = 'white', maxDepth = 3, firstCapture = null) {
             if (depth >= maxDepth) return 0;
 
             const currentBoard = boardState || board;
+            const currentPawnDirections = pawnState || pawnDirections;
             let totalScore = 0;
             let candidateNum = 0;
-
-            console.log("depth=",depth)
-            logAllPieces(currentBoard)
 
             // 初回戦闘フラグの初期化（個別駒ごと）
             if (firstCapture === null) {
@@ -1119,7 +1119,7 @@
                     const piece = currentBoard[row][col];
                     if (!piece || getColor(piece) !== turn) continue;
 
-                    const moves = getPossibleMoves(piece, row, col);
+                    const moves = getPossibleMoves(piece, row, col, currentBoard, currentPawnDirections);
 
                     for (const [newRow, newCol] of moves) {
                         const eliminatePiece = currentBoard[newRow][newCol];
@@ -1158,31 +1158,54 @@
 
                                     // 盤面をコピーして移動シミュレーション
                                     const newBoard = currentBoard.map(row => [...row]);
-                                    newBoard[newRow][newCol] = piece;
-                                    newBoard[row][col] = null;
+                                    const newPawnDirections = { ...currentPawnDirections}
+                                    if (piece.includes('pawn')){
+                                        newBoard[newRow][newCol] = piece;
+                                        newBoard[row][col] = null;
+                                        newPawnDirections[`${newRow},${newCol}`] = newPawnDirections[`${row},${col}`];
+                                        delete newPawnDirections[`${row},${col}`];
+                                    } else {
+                                        newBoard[newRow][newCol] = piece;
+                                        newBoard[row][col] = null;
+                                    }
 
                                     // 再帰評価（更新された初回戦闘フラグを引き継ぎ）
-                                    score += evaluateBoard(newBoard, depth, getOppositeColor(turn), maxDepth, newFirstCapture);
+                                    score += evaluateBoard(newBoard, newPawnDirectory, depth+1, getOppositeColor(turn), maxDepth, newFirstCapture);
                                 } else {
                                     score += kingBonus;
 
                                     // 盤面をコピーして移動シミュレーション
                                     const newBoard = currentBoard.map(row => [...row]);
-                                    newBoard[newRow][newCol] = piece;
-                                    newBoard[row][col] = null;
-
+                                    const newPawnDirections = { ...currentPawnDirections}
+                                    if (piece.includes('pawn')){
+                                        newBoard[newRow][newCol] = piece;
+                                        newBoard[row][col] = null;
+                                        newPawnDirections[`${newRow},${newCol}`] = newPawnDirections[`${row},${col}`];
+                                        delete newPawnDirections[`${row},${col}`];
+                                    } else {
+                                        newBoard[newRow][newCol] = piece;
+                                        newBoard[row][col] = null;
+                                    }
                                     // 再帰評価
-                                    score += evaluateBoard(newBoard, depth, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+                                    score += evaluateBoard(newBoard, newPawnDirections, depth+1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
                                 }
                             } else {
                                 // キングサポートなしの場合
                                 // 盤面をコピーして移動シミュレーション
                                 const newBoard = currentBoard.map(row => [...row]);
-                                newBoard[newRow][newCol] = piece;
-                                newBoard[row][col] = null;
+                                const newPawnDirections = { ...currentPawnDirections};
+                                if (piece.includes('pawn')){
+                                    newBoard[newRow][newCol] = piece;
+                                    newBoard[row][col] = null;
+                                    newPawnDirections[`${newRow},${newCol}`] = newPawnDirections[`${row},${col}`];
+                                    delete newPawnDirections[`${row},${col}`];
+                                } else {
+                                    newBoard[newRow][newCol] = piece;
+                                    newBoard[row][col] = null;
+                                }
 
                                 // 再帰評価
-                                score += evaluateBoard(newBoard, depth, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+                                score += evaluateBoard(newBoard, newPawnDirections, depth+1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
                             }
 
                             totalScore += score;
@@ -1191,37 +1214,50 @@
                 }
             }
 
-            console.log("candidateNum=",candidateNum)
-            if (candidateNum > 0) {
-                totalScore /= candidateNum;
-                return totalScore
-            }
 
             // 取得できる移動先がない場合
-            // ランダムに移動
-            // 指定色の全駒について評価
-            for (let row = 0; row < 7; row++) {
-                for (let col = 0; col < 9; col++) {
-                    const piece = currentBoard[row][col];
-                    if (!piece || getColor(piece) !== turn) continue;
+            if (candidateNum == 0) {
+                // ランダムに移動
+                // 指定色の全駒について評価
+                for (let row = 0; row < 7; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        const piece = currentBoard[row][col];
+                        if (!piece || getColor(piece) !== turn) continue;
+                        const moves = getPossibleMoves(piece, row, col, currentBoard, currentPawnDirections);
 
-                    const moves = getPossibleMoves(piece, row, col);
+                        for (const [newRow, newCol] of moves) {
+                            candidateNum++;
 
-                    for (const [newRow, newCol] of moves) {
-                        candidateNum++;
-
-                        // 盤面をコピーして移動シミュレーション
-                        const newBoard = currentBoard.map(row => [...row]);
-                        newBoard[newRow][newCol] = piece;
-                        newBoard[row][col] = null;
-
-                        // 再帰評価
-                        let score = 0;
-                        score += evaluateBoard(newBoard, depth+1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
-                        totalScore += score;
+                            // 盤面をコピーして移動シミュレーション
+                            const newBoard = currentBoard.map(row => [...row]);
+                            const newPawnDirections = { ...currentPawnDirections};
+                            if (piece.includes('pawn')){
+                                newBoard[newRow][newCol] = piece;
+                                newBoard[row][col] = null;
+                                newPawnDirections[`${newRow},${newCol}`] = newPawnDirections[`${row},${col}`];
+                                delete newPawnDirections[`${row},${col}`];
+                            } else {
+                                newBoard[newRow][newCol] = piece;
+                                newBoard[row][col] = null;
+                            }
+                            // 再帰評価
+                            let score = 0;
+                            score += evaluateBoard(newBoard, newPawnDirections, depth+1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+                            totalScore += score;
+                        }
                     }
                 }
             }
+            if (candidateNum > 0){
+                totalScore /= candidateNum
+                return totalScore;
+            }
+
+            // 移動できる駒がない場合
+            let score = 0;
+            const newBoard = currentBoard.map(row => [...row]);
+            score += evaluateBoard(newBoard, { ... currentPawnDirections}, depth+1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+            totalScore += score;
 
             return totalScore;
         }
@@ -1260,7 +1296,7 @@
             }
 
             // 盤面評価スコア計算（白手番開始）
-            const boardScore = evaluateBoard(null, 0, 'white', 3);
+            const boardScore = evaluateBoard(null, null, 0, 'white', 5);
 
             // 統計表示を更新
             const statsElement = document.getElementById('pieceStats');
