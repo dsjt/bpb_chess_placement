@@ -196,6 +196,21 @@
           transform: scale(0.8);
       }
 
+      .piece-captured {
+          animation: fadeOutScale 0.6s ease-out forwards;
+      }
+
+      @keyframes fadeOutScale {
+          0% {
+              opacity: 1;
+              transform: scale(1);
+          }
+          100% {
+              opacity: 0;
+              transform: scale(0.3);
+          }
+      }
+
       .info-panel {
           min-width:280px;
           background: #f8f9fa;
