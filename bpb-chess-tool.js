@@ -262,22 +262,6 @@ function updateCellDisplay(row, col) {
     }
 }
 
-function getRotatedMovement(deltaX, deltaY, direction) {
-    // direction: 0=上, 1=右, 2=下, 3=左
-    switch(direction) {
-        case 0: // 上向き（デフォルト）
-            return { x: deltaX, y: deltaY };
-        case 1: // 右向き（90度回転）
-            return { x: -deltaY, y: deltaX };
-        case 2: // 下向き（180度回転）
-            return { x: -deltaX, y: -deltaY };
-        case 3: // 左向き（270度回転）
-            return { x: deltaY, y: -deltaX };
-        default:
-            return { x: deltaX, y: deltaY };
-    }
-}
-
 // アニメーション
 function animatePieceMove(fromRow, fromCol, toRow, toCol) {
     const fromCell = document.querySelector(`[data-row="${fromRow}"][data-col="${fromCol}"]`);
@@ -688,8 +672,13 @@ function logAllPieces(currentBoard) {
 }
 
 // 盤面評価関数
-function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 3, firstCapture = null) {
-    if (depth >= maxDepth) return 0;
+function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 10, firstCapture = null, noCaptureCount = 0) {
+
+    // 深すぎる探索は重くなってしまうので、荒い評価で代用する。
+    if (depth >= maxDepth) {
+        return heuristicEvaluateBoard(boardState);
+    }
+    if (noCaptureCount >= 2) return 0;
 
     const currentBoard = boardState || board.map(row => [...row]);
     let totalScore = 0;
@@ -749,7 +738,7 @@ function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 
                 currentBoard[row][col] = null;
 
                 // 再帰評価（更新された初回戦闘フラグを引き継ぎ）
-                const b = evaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture);
+                const b = evaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture, 0);
                 score += b
                 totalScore += score;
 
@@ -780,13 +769,13 @@ function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 
             for (const [newRow, newCol] of moves) {
                 candidateNum++;
 
-                // 盤面をコピーして移動シミュレーション
+                // 移動シミュレーション
                 currentBoard[newRow][newCol] = piece;
                 currentBoard[row][col] = null;
 
                 // 再帰評価
                 let score = 0;
-                score += evaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+                score += evaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture, noCaptureCount+1);
                 totalScore += score;
 
                 // 盤面を元に戻す
@@ -802,7 +791,7 @@ function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 
     } else {
         // 移動できる駒がない場合
         let score = 0;
-        score += evaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, new Set(firstCapture));
+        score += evaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture, noCaptureCount+1);
         totalScore += score;
 
         return totalScore;
@@ -822,6 +811,51 @@ function countAllyKings(boardState, color) {
         }
     }
     return kingCount;
+}
+
+// 荒い盤面評価。
+// 駒のスコアにのみ依存する。
+function heuristicEvaluateBoard(boardState = null) {
+
+    const currentBoard = boardState || board.map(row => [...row]);
+    let totalScore = 0;
+
+    let whiteCount = 0;
+    let blackCount = 0
+    let whiteKingCount = 0;
+    let blackKingCount = 0;
+
+    for (let row = 0; row < 7; row++) {
+        for (let col = 0; col < 9; col++) {
+            const piece = currentBoard[row][col];
+            if (!piece) continue;
+
+            if (getColor(piece) == 'white') {
+                whiteCount++;
+            }else{
+                blackCount++;
+            }
+
+            if (piece.type !== 'king'){
+                totalScore += pieceValues[piece.toString()][0];
+                totalScore += pieceValues[piece.toString()][1];
+            } else {
+                // キングの自軍効果は別計算
+                totalScore += pieceValues[piece.toString()][0];
+                if (getColor(piece) === 'white'){
+                    whiteKingCount++;
+                } else{
+                    blackKingCount++;
+                }
+            }
+        }
+    }
+
+    // キングの自軍効果計算
+    totalScore += whiteCount*pieceValues['white-king'][1]
+    totalScore += blackCount*pieceValues['black-king'][1]
+
+    return totalScore;
 }
 
 let simulationRunning = false;
@@ -1000,7 +1034,8 @@ function updateStats() {
     }
 
     // 盤面評価スコア計算（白手番開始）
-    const boardScore = evaluateBoard(null, 0, 'white', 5);
+    // const boardScore = evaluateBoard();
+    const boardScore = 0;
 
     // 統計表示を更新
     const statsElement = document.getElementById('pieceStats');
@@ -1014,7 +1049,7 @@ function updateStats() {
     html += '<hr style="margin: 10px 0;">';
 
     // 盤面評価スコア
-    html += `<div class="piece-count"><strong>盤面評価:</strong> <span>${boardScore.toFixed(1)}</span></div>`;
+    html += `<div class="piece-count"><strong>盤面評価(修正対応中):</strong> <span>${boardScore.toFixed(1)}</span></div>`;
 
     html += '<hr style="margin: 10px 0;">';
 
