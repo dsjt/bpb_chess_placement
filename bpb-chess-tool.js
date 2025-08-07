@@ -994,7 +994,7 @@ function updateStats() {
                 const piece = board[row][col];
                 stats[piece.toString()] = (stats[piece.toString()] || 0) + 1;
 
-                if (piece.type === 'white') colors.white++;
+                if (getColor(piece) === 'white') colors.white++;
                 else colors.black++;
             }
         }
