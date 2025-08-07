@@ -640,7 +640,7 @@ function getPossibleMoves(piece, row, col, currentBoard = board) {
 function addSlidingMoves(moves, row, col, directions, piece, currentBoard = board) {
     directions.forEach(([dr, dc]) => {
         // 全て移動出来るわけではなく、5マスまで。
-        for (let i = 1; i < 5; i++) {
+        for (let i = 1; i < 6; i++) {
             const newRow = row + dr * i;
             const newCol = col + dc * i;
 
@@ -893,7 +893,6 @@ function executeMove(move) {
     if (simulationRunning) {
         animateCapture(to.row, to.col);
         animatePieceMove(from.row, from.col, to.row, to.col);
-        // animatePieceMove内で実際の盤面更新も行う
     } else {
         // 即座に移動
 
