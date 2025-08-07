@@ -262,21 +262,42 @@ function updateCellDisplay(row, col) {
     }
 }
 
+function getRotatedMovement(deltaX, deltaY, direction) {
+    // direction: 0=上, 1=右, 2=下, 3=左
+    switch(direction) {
+        case 0: // 上向き（デフォルト）
+            return { x: deltaX, y: deltaY };
+        case 1: // 右向き（90度回転）
+            return { x: -deltaY, y: deltaX };
+        case 2: // 下向き（180度回転）
+            return { x: -deltaX, y: -deltaY };
+        case 3: // 左向き（270度回転）
+            return { x: deltaY, y: -deltaX };
+        default:
+            return { x: deltaX, y: deltaY };
+    }
+}
+
 // アニメーション
 function animatePieceMove(fromRow, fromCol, toRow, toCol) {
     const fromCell = document.querySelector(`[data-row="${fromRow}"][data-col="${fromCol}"]`);
-    const toCell = document.querySelector(`[data-row="${toRow}"][data-col="${toCol}"]`);
     const pieceElement = fromCell.querySelector('.placed-piece');
 
     if (!pieceElement) return;
 
+    // 現在の回転状態を取得
+    const currentTransform = pieceElement.style.transform || '';
+    const rotateMatch = currentTransform.match(/rotate\([^)]*\)/);
+    const currentRotation = rotateMatch ? rotateMatch[0] : '';
+
     // 移動距離を計算
     const cellSize = 62; // 60px + 2px gap
-    const deltaX = (toCol - fromCol) * cellSize;
-    const deltaY = (toRow - fromRow) * cellSize;
+    const deltaX = (toCol - fromCol) * cellSize;  // col差 → X方向
+    const deltaY = (toRow - fromRow) * cellSize;  // row差 → Y方向
 
     // アニメーション開始
-    pieceElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    // 既存の回転を維持して移動
+    pieceElement.style.transform = `translate(${deltaX}px, ${deltaY}px) ${currentRotation}`;
     pieceElement.style.zIndex = '1000'; // 他の駒の上に表示
 
     // アニメーション完了後の処理
@@ -289,9 +310,20 @@ function animatePieceMove(fromRow, fromCol, toRow, toCol) {
         updateCellDisplay(toRow, toCol);
 
         // スタイルリセット
-        pieceElement.style.transform = '';
+        pieceElement.style.transform = currentRotation;
         pieceElement.style.zIndex = '';
     }, 500);
+}
+
+function animateCapture(row, col) {
+    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+    const pieceElement = cell.querySelector('.placed-piece');
+
+    if (pieceElement) {
+        // キャプチャアニメーション開始
+        pieceElement.classList.add('piece-captured');
+
+    }
 }
 
 // 中クリックイベント（進行不可能設定）
@@ -859,11 +891,15 @@ function executeMove(move) {
 
     // アニメーションありの場合
     if (simulationRunning) {
+        animateCapture(to.row, to.col);
         animatePieceMove(from.row, from.col, to.row, to.col);
         // animatePieceMove内で実際の盤面更新も行う
     } else {
         // 即座に移動
-        performMove(from, to, piece);
+
+        board[to.row][to.col] = board[fromRow][fromCol];
+        board[from.row][from.col] = null;
+
         // DOM更新
         updateCellDisplay(from.row, from.col);
         updateCellDisplay(to.row, to.col);
@@ -877,6 +913,7 @@ function executeMove(move) {
         console.log(`${piece} が移動しました (${from.row},${from.col}) → (${to.row},${to.col})`);
     }
 }
+
 
 function stopSimulation() {
     simulationRunning = false;
