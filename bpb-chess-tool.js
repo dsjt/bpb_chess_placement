@@ -672,7 +672,30 @@ function logAllPieces(currentBoard) {
 }
 
 // 盤面評価関数
-function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 10, firstCapture = null, noCaptureCount = 0) {
+function evaluateBoard(){
+    // 軽量化のため盤面評価を軽量化する。
+    // 駒の数が6未満 => 全探索評価
+    // 駒の数が6以上 => 確率的評価
+    let count = 0;
+    for(let row=0;row<7;row++){
+        for(let col=0;col<9;col++){
+            if(board[row][col]){
+                count += 1;
+            }
+        }
+    }
+
+    // 駒の数が6未満ならば全探索
+    if(count<6){
+        return fullEvaluateBoard();
+    }else{
+        return probabilisticEvaluateBoard();
+    }
+
+}
+
+function fullEvaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 6, firstCapture = null, noCaptureCount = 0) {
+
 
     // 深すぎる探索は重くなってしまうので、荒い評価で代用する。
     if (depth >= maxDepth) {
@@ -738,7 +761,7 @@ function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 
                 currentBoard[row][col] = null;
 
                 // 再帰評価（更新された初回戦闘フラグを引き継ぎ）
-                const b = evaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture, 0);
+                const b = fullEvaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture, 0);
                 score += b
                 totalScore += score;
 
@@ -775,7 +798,7 @@ function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 
 
                 // 再帰評価
                 let score = 0;
-                score += evaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture, noCaptureCount+1);
+                score += fullEvaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture, noCaptureCount+1);
                 totalScore += score;
 
                 // 盤面を元に戻す
@@ -791,7 +814,7 @@ function evaluateBoard(boardState = null, depth = 0, turn = 'white', maxDepth = 
     } else {
         // 移動できる駒がない場合
         let score = 0;
-        score += evaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture, noCaptureCount+1);
+        score += fullEvaluateBoard(currentBoard, depth+1, getOppositeColor(turn), maxDepth, firstCapture, noCaptureCount+1);
         totalScore += score;
 
         return totalScore;
@@ -858,6 +881,90 @@ function heuristicEvaluateBoard(boardState = null) {
     return totalScore;
 }
 
+function probabilisticEvaluateBoard(iteration=1000){
+
+    let score = 0;
+    for(let i=0;i<iteration;i++){
+        score += simulateScore();
+    }
+    return score/iteration;
+}
+
+function simulateScore(){
+
+    let score = 0;
+    let turn = 'white';
+    let noBattleCount = 0;
+    const initialBoard = board.map(row => [...row]);
+
+    // 先にkingの数を求めておく
+    let kingCount = {'white':0, 'black':0};
+    for (let row = 0; row < 7; row++) {
+        for (let col = 0; col < 9; col++) {
+            const piece = board[row][col];
+            if (!piece) continue;
+            if (piece.type == 'king'){
+                kingCount[getColor(piece)] += 1
+            }
+        }
+    }
+
+    let firstCapture = new Set();
+
+    for(let i=0;i<100;i++){
+        const moves = getAllPossibleMoves(turn);
+        const captureMoves = moves.filter(move => isCapture(move));
+
+        let selectedMove;
+
+        if (captureMoves.length > 0) {
+            // 取る手があればランダム選択
+            selectedMove = captureMoves[Math.floor(Math.random() * captureMoves.length)];
+            const { piece, from, to, target } = selectedMove;
+            noBattleCount = 0;
+
+            score += pieceValues[piece.toString()][0]
+            if (target.type !== 'king'){
+                score += pieceValues[target.toString()][1]
+            }
+            if (!firstCapture.has(piece.id)){
+                score += 2*kingCount[getColor(piece)]*pieceValues[getColor(piece)+'-king'][1];
+                firstCapture.add(piece.id)
+            } else {
+                score += kingCount[getColor(piece)]*pieceValues[getColor(piece)+'-king'][1];
+            }
+
+        } else if (moves.length > 0) {
+            // 通常の手をランダム選択
+            selectedMove = moves[Math.floor(Math.random() * moves.length)];
+            noBattleCount++;
+        } else {
+            // 動けない場合は手番スキップ
+            noBattleCount++;
+        }
+
+        // 停止条件チェック
+        if (noBattleCount >= 4) { // 4手連続戦闘なしで停止
+            break;
+        }
+
+        if (selectedMove){
+            const { piece, from, to, target } = selectedMove;
+
+            // 即座に移動
+            board[to.row][to.col] = board[from.row][from.col];
+            board[from.row][from.col] = null;
+        }
+
+        // 手番交代
+        turn = turn === 'white' ? 'black' : 'white';
+    }
+    board = initialBoard;
+
+    return score;
+
+}
+
 let simulationRunning = false;
 let currentTurn = 'white';
 let battleCount = 0;
@@ -880,9 +987,7 @@ function startSimulation() {
 
 function simulationStep() {
 
-    if (!simulationRunning) {
-        return;
-    }
+    if (!simulationRunning) return;
 
     const moves = getAllPossibleMoves(currentTurn);
     const captureMoves = moves.filter(move => isCapture(move));
@@ -908,6 +1013,32 @@ function simulationStep() {
         return;
     }
 
+function executeMove(move) {
+    const { piece, from, to, target } = move;
+
+    // アニメーションありの場合
+    if (simulationRunning) {
+        animateCapture(to.row, to.col);
+        animatePieceMove(from.row, from.col, to.row, to.col);
+    } else {
+        // 即座に移動
+
+        board[to.row][to.col] = board[fromRow][fromCol];
+        board[from.row][from.col] = null;
+
+        // DOM更新
+        updateCellDisplay(from.row, from.col);
+        updateCellDisplay(to.row, to.col);
+
+    }
+
+    // 戦闘ログ出力
+    if (target) {
+        console.log(`${piece} が ${target} を取りました (${from.row},${from.col}) → (${to.row},${to.col})`);
+    } else {
+        console.log(`${piece} が移動しました (${from.row},${from.col}) → (${to.row},${to.col})`);
+    }
+}
     if (selectedMove) {
         executeMove(selectedMove);
     }
@@ -1034,8 +1165,8 @@ function updateStats() {
     }
 
     // 盤面評価スコア計算（白手番開始）
-    // const boardScore = evaluateBoard();
-    const boardScore = 0;
+    const boardScore = evaluateBoard();
+    // const boardScore = 0;
 
     // 統計表示を更新
     const statsElement = document.getElementById('pieceStats');
@@ -1049,7 +1180,7 @@ function updateStats() {
     html += '<hr style="margin: 10px 0;">';
 
     // 盤面評価スコア
-    html += `<div class="piece-count"><strong>盤面評価(修正対応中):</strong> <span>${boardScore.toFixed(1)}</span></div>`;
+    html += `<div class="piece-count"><strong>盤面評価:</strong> <span>${boardScore.toFixed(1)}</span></div>`;
 
     html += '<hr style="margin: 10px 0;">';
 
