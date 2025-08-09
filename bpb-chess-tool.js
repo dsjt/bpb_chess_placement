@@ -40,6 +40,8 @@ let blockedCells = new Set(); // "row,col" 形式で進行不可能セルを管�
 let draggedPiece = null;
 let draggedFromBoard = false;
 let draggedFromCell = null;
+// ストレージボード（2行×9列）
+let storageBoard = Array(2).fill().map(() => Array(9).fill(null));
 
 // ボード初期化
 function initializeBoard() {
@@ -76,12 +78,37 @@ function initializeBoard() {
 
 }
 
+function initializeStorage() {
+    const storageArea = document.getElementById('storageArea');
+
+    for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 9; col++) {
+            const cell = document.createElement('div');
+            cell.className = 'storage-cell';
+            cell.dataset.storageRow = row;
+            cell.dataset.storageCol = col;
+
+            // ドロップイベント追加
+            cell.addEventListener('dragover', handleDragOver);
+            cell.addEventListener('drop', handleStorageDrop);
+            cell.addEventListener('dragleave', handleDragLeave);
+
+            storageArea.appendChild(cell);
+        }
+    }
+}
+
 // パレットの駒にドラッグイベントを追加
 function initializePalette() {
     document.querySelectorAll('.piece-item').forEach(item => {
         item.addEventListener('dragstart', handlePaletteDragStart);
         item.addEventListener('dragend', handleDragEnd);
     });
+}
+
+function initializePlacementControls() {
+    document.getElementById('suggestBtn').addEventListener('click', suggestPlacement);
+    // document.getElementById('optimizeBtn').addEventListener('click', optimizePlacement);
 }
 
 // パレットからのドラッグ開始
@@ -99,6 +126,7 @@ function handlePaletteDragStart(e) {
     // マウス追従
     document.addEventListener('mousemove', followMouse);
 }
+
 
 // ボード上の駒のドラッグ開始
 function handleBoardDragStart(e) {
@@ -120,6 +148,31 @@ function handleBoardDragStart(e) {
     document.addEventListener('mousemove', followMouse);
 }
 
+let draggedFromStorage = false;
+let draggedFromStorageCell = null;
+
+// ストレージからのドラッグ開始
+function handleStorageDragStart(e) {
+    const cell = e.target.closest('.storage-cell');
+    const row = parseInt(cell.dataset.storageRow);
+    const col = parseInt(cell.dataset.storageCol);
+
+    draggedPiece = storageBoard[row][col];
+    draggedFromStorage = true;
+    draggedFromStorageCell = { row, col };
+    draggedFromBoard = false;
+
+    const draggingElement = document.getElementById('draggingPiece');
+    draggingElement.textContent = draggedPiece.getSymbol();
+    draggingElement.className = `dragging-piece ${draggedPiece.color === 'white' ? 'white-piece' : 'black-piece'}`;
+
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+
+    document.addEventListener('mousemove', followMouse);
+}
+
+
 // マウス追従
 function followMouse(e) {
     const draggingElement = document.getElementById('draggingPiece');
@@ -131,12 +184,18 @@ function followMouse(e) {
 // ドラッグオーバー
 function handleDragOver(e) {
     e.preventDefault();
-    e.target.closest('.board-cell').classList.add('drag-over');
+    const cell = e.target.closest('.board-cell') || e.target.closest('.storage-cell');
+    if (cell && cell.classList) {
+        cell.classList.add('drag-over');
+    }
 }
 
 // ドラッグリーブ
 function handleDragLeave(e) {
-    e.target.closest('.board-cell').classList.remove('drag-over');
+    const cell = e.target.closest('.board-cell, .storage-cell');
+    if (cell) {
+        cell.classList.remove('drag-over');
+    }
 }
 
 // ドロップ
@@ -154,12 +213,12 @@ function handleDrop(e) {
 
     // 元の位置から駒を削除（ボードからの移動の場合）
     if (draggedFromBoard && draggedFromCell) {
-        // **ID移行処理を追加**
-        const fromKey = `${draggedFromCell.row},${draggedFromCell.col}`;
-        const toKey = `${row},${col}`;
-
         board[draggedFromCell.row][draggedFromCell.col] = null;
         updateCellDisplay(draggedFromCell.row, draggedFromCell.col);
+    } else if (draggedFromStorage && draggedFromStorageCell) {
+        // ストレージからボードへ
+        storageBoard[draggedFromStorageCell.row][draggedFromStorageCell.col] = null;
+        updateStorageCellDisplay(draggedFromStorageCell.row, draggedFromStorageCell.col);
     }
 
     // 新しい位置に駒を配置
@@ -167,6 +226,32 @@ function handleDrop(e) {
     updateCellDisplay(row, col);
 
     cell.classList.remove('drag-over');
+    updateStats();
+}
+
+function handleStorageDrop(e) {
+    e.preventDefault();
+    const cell = e.target.closest('.storage-cell');
+    const row = parseInt(cell.dataset.storageRow);
+    const col = parseInt(cell.dataset.storageCol);
+
+    // 元の位置から駒を削除
+    if (draggedFromBoard && draggedFromCell) {
+        // ボードからストレージへ
+        board[draggedFromCell.row][draggedFromCell.col] = null;
+        updateCellDisplay(draggedFromCell.row, draggedFromCell.col);
+    } else if (draggedFromStorage && draggedFromStorageCell) {
+        // ストレージ内移動
+        storageBoard[draggedFromStorageCell.row][draggedFromStorageCell.col] = null;
+        updateStorageCellDisplay(draggedFromStorageCell.row, draggedFromStorageCell.col);
+    }
+
+    // ストレージに駒を配置
+    storageBoard[row][col] = draggedPiece;
+    updateStorageCellDisplay(row, col);
+
+    cell.classList.remove('drag-over');
+    sortStorage(); // 自動ソート
     updateStats();
 }
 
@@ -184,22 +269,30 @@ function handleDragEnd(e) {
         piece.classList.remove('dragging');
     });
 
-    // ボード外にドロップした場合の削除処理
-    if (draggedFromBoard && draggedFromCell) {
+    // ボード外ドロップ時の削除処理
+    if ((draggedFromBoard && draggedFromCell) || (draggedFromStorage && draggedFromStorageCell)) {
         const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
-        if (!dropTarget || !dropTarget.closest('.board-cell')) {
-            // ボード外にドロップ = 削除
-            board[draggedFromCell.row][draggedFromCell.col] = null;
-            updateCellDisplay(draggedFromCell.row, draggedFromCell.col);
+        if (!dropTarget || (!dropTarget.closest('.board-cell') && !dropTarget.closest('.storage-cell'))) {
+            // 削除処理
+            if (draggedFromBoard && draggedFromCell) {
+                board[draggedFromCell.row][draggedFromCell.col] = null;
+                updateCellDisplay(draggedFromCell.row, draggedFromCell.col);
+            } else if (draggedFromStorage && draggedFromStorageCell) {
+                storageBoard[draggedFromStorageCell.row][draggedFromStorageCell.col] = null;
+                updateStorageCellDisplay(draggedFromStorageCell.row, draggedFromStorageCell.col);
+            }
             updateStats();
         }
     }
 
+    // フラグリセット
     draggedPiece = null;
     draggedFromBoard = false;
+    draggedFromStorage = false;
     draggedFromCell = null;
+    draggedFromStorageCell = null;
 
-    updateInitialBoardState()
+    // updateInitialBoardState()
 
 }
 
@@ -253,6 +346,41 @@ function updateCellDisplay(row, col) {
         pieceElement.draggable = true;
 
         pieceElement.addEventListener('dragstart', handleBoardDragStart);
+        pieceElement.addEventListener('dragend', handleDragEnd);
+
+        cell.appendChild(pieceElement);
+        cell.classList.add('occupied');
+    } else {
+        cell.classList.remove('occupied');
+    }
+}
+
+function updateStorageCellDisplay(row, col) {
+    const cell = document.querySelector(`[data-storage-row="${row}"][data-storage-col="${col}"]`);
+    const existingPiece = cell.querySelector('.placed-piece');
+
+    if (existingPiece) {
+        existingPiece.remove();
+    }
+
+    if (storageBoard[row][col]) {
+        const piece = storageBoard[row][col];
+        const pieceElement = document.createElement('span');
+        pieceElement.className = `placed-piece ${piece.color === 'white' ? 'white-piece' : 'black-piece'}`;
+
+        // ポーンの回転処理
+        if (piece.type === 'pawn') {
+            pieceElement.textContent = piece.getSymbol();
+            const rotationDeg = piece.direction * 90;
+            pieceElement.style.transform = `rotate(${rotationDeg}deg)`;
+            pieceElement.style.transformOrigin = 'center';
+            pieceElement.style.display = 'inline-block';
+        } else {
+            pieceElement.textContent = piece.getSymbol();
+        }
+
+        pieceElement.draggable = true;
+        pieceElement.addEventListener('dragstart', handleStorageDragStart);
         pieceElement.addEventListener('dragend', handleDragEnd);
 
         cell.appendChild(pieceElement);
@@ -372,6 +500,42 @@ function handleRightClick(e) {
 
         // 評価を再計算
         updateStats();
+    }
+}
+
+function getSortPriority(piece) {
+    const colorPriority = piece.color === 'white' ? 0 : 1000;
+    const typePriority = {
+        'pawn': 1, 'knight': 2, 'bishop': 3,
+        'rook': 4, 'queen': 5, 'king': 6
+    };
+    return colorPriority + (typePriority[piece.type] || 999);
+}
+
+function sortStorage() {
+    // 全駒を配列に収集
+    const allPieces = [];
+    for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 9; col++) {
+            if (storageBoard[row][col]) {
+                allPieces.push(storageBoard[row][col]);
+                storageBoard[row][col] = null;
+            }
+        }
+    }
+
+    // ソート実行
+    allPieces.sort((a, b) => getSortPriority(a) - getSortPriority(b));
+
+    // 再配置
+    let index = 0;
+    for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 9; col++) {
+            if (index < allPieces.length) {
+                storageBoard[row][col] = allPieces[index++];
+            }
+            updateStorageCellDisplay(row, col);
+        }
     }
 }
 
@@ -673,7 +837,7 @@ function logAllPieces(currentBoard) {
 
 // 盤面評価関数
 function evaluateBoard(){
-    // 軽量化のため盤面評価を軽量化する。
+    // 軽量化のため盤面評価を打ち分ける。
     // 駒の数が6未満 => 全探索評価
     // 駒の数が6以上 => 確率的評価
     let count = 0;
@@ -1197,6 +1361,233 @@ function updateStats() {
     statsElement.innerHTML = html;
 }
 
+let initialPlacementState = null; // 初期配置状態
+let bestPlacement = null;         // 最良配置
+let bestScore = -Infinity;        // 最良スコア
+
+function suggestPlacement() {
+    // 初期状態を保存
+    saveInitialPlacementState();
+
+    // ストレージに駒がない場合は終了
+    const storagePieces = getStoragePieces();
+    if (storagePieces.length === 0) {
+        alert('ストレージに駒がありません');
+        return;
+    }
+
+    console.log(`配置提案開始: ${storagePieces.length}個の駒を配置`);
+
+    // 最良配置をリセット
+    bestPlacement = null;
+    bestScore = -Infinity;
+
+    // ボタンを無効化
+    const suggestBtn = document.getElementById('suggestBtn');
+    suggestBtn.disabled = true;
+    suggestBtn.textContent = '🔄 計算中...';
+
+    // 非同期で配置試行
+    setTimeout(() => {
+        tryRandomPlacements(storagePieces, 300);
+        applyBestPlacement();
+
+        // ボタンを復旧
+        suggestBtn.disabled = false;
+        suggestBtn.textContent = '🎯 配置提案';
+
+        console.log(`最良スコア: ${bestScore.toFixed(2)}`);
+    }, 100);
+}
+
+function saveInitialPlacementState() {
+    initialPlacementState = {
+        board: board.map(row => [...row]),
+        storageBoard: storageBoard.map(row => [...row])
+    };
+}
+
+function getStoragePieces() {
+    const pieces = [];
+    for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 9; col++) {
+            if (storageBoard[row][col]) {
+                pieces.push({
+                    piece: storageBoard[row][col],
+                    storagePos: { row, col }
+                });
+            }
+        }
+    }
+    return pieces;
+}
+
+function tryRandomPlacements(pieces, tryCount) {
+
+    let successCount = 0;
+
+    for (let attempt = 0; attempt < tryCount; attempt++) {
+        // 初期状態に戻す
+        resetToInitialState();
+
+        // ランダム配置を試行
+        const placement = generateRandomPlacement(pieces);
+
+        if (placement.length === pieces.length) {
+            successCount++;
+            // 全駒配置成功時にスコア評価
+            const score = evaluateBoard();
+            if (score > bestScore) {
+                bestScore = score;
+                bestPlacement = [...placement];
+                console.log(`新最良スコア: ${score.toFixed(2)} (試行${attempt + 1})`);
+            }
+        }
+    }
+    console.log(`成功配置: ${successCount}/${tryCount} (${(successCount/tryCount*100).toFixed(1)}%)`);
+}
+
+function generateRandomPlacement(pieces) {
+    const placement = [];
+    const shuffledPieces = [...pieces].sort(() => Math.random() - 0.5);
+
+    for (const pieceData of shuffledPieces) {
+        const candidates = getStrategicCandidates(pieceData.piece);
+
+        if (candidates.length === 0) continue;
+
+        // ランダムに候補から選択
+        const randomIndex = Math.floor(Math.random() * candidates.length);
+        const position = candidates[randomIndex];
+
+        // 駒を配置
+        board[position.row][position.col] = pieceData.piece;
+        placement.push({
+            piece: pieceData.piece,
+            position: position,
+            storagePos: pieceData.storagePos
+        });
+    }
+
+    return placement;
+}
+
+function getStrategicCandidates(newPiece) {
+    const candidates = [];
+
+    // 既存の駒の利き先候補
+    for (let row = 0; row < 7; row++) {
+        for (let col = 0; col < 9; col++) {
+            const existingPiece = board[row][col];
+            if (!existingPiece) continue;
+
+            const moves = getPossibleMoves(existingPiece, row, col);
+            moves.forEach(([moveRow, moveCol]) => {
+                if (!board[moveRow][moveCol] && !isBlocked(moveRow, moveCol)) {
+                    candidates.push({ row: moveRow, col: moveCol, type: 'target' });
+                }
+            });
+        }
+    }
+
+    // 新しい駒が既存駒を狙える位置
+    for (let row = 0; row < 7; row++) {
+        for (let col = 0; col < 9; col++) {
+            if (board[row][col] || isBlocked(row, col)) continue;
+
+            // 仮配置して利きをチェック
+            board[row][col] = newPiece;
+            const moves = getPossibleMoves(newPiece, row, col);
+
+            // 既存駒を狙えるかチェック
+            const canAttackExisting = moves.some(([moveRow, moveCol]) => {
+                const target = board[moveRow][moveCol];
+                return target && target !== newPiece;
+            });
+
+            board[row][col] = null; // 仮配置を戻す
+
+            if (canAttackExisting) {
+                candidates.push({ row, col, type: 'attacker' });
+            }
+        }
+    }
+
+    // 候補がない場合は全ての空きマスを候補にする
+    if (candidates.length === 0) {
+        for (let row = 0; row < 7; row++) {
+            for (let col = 0; col < 9; col++) {
+                if (!board[row][col] && !isBlocked(row, col)) {
+                    candidates.push({ row, col, type: 'fallback' });
+                }
+            }
+        }
+    }
+
+    // 重複を除去
+    const uniqueCandidates = [];
+    const seen = new Set();
+
+    candidates.forEach(candidate => {
+        const key = `${candidate.row},${candidate.col}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            uniqueCandidates.push(candidate);
+        }
+    });
+
+    return uniqueCandidates;
+}
+
+
+function applyBestPlacement() {
+    if (!bestPlacement) {
+        alert('最適な配置が見つかりませんでした');
+        return;
+    }
+
+    // 初期状態に戻す
+    resetToInitialState();
+
+    // 最良配置を適用
+    bestPlacement.forEach(placement => {
+        const { piece, position, storagePos } = placement;
+
+        // ストレージから除去
+        storageBoard[storagePos.row][storagePos.col] = null;
+        updateStorageCellDisplay(storagePos.row, storagePos.col);
+
+        // 盤面に配置
+        board[position.row][position.col] = piece;
+        updateCellDisplay(position.row, position.col);
+    });
+
+    // ストレージをソート
+    sortStorage();
+    updateStats();
+}
+
+function resetToInitialState() {
+    if (!initialPlacementState) return;
+
+    // 盤面復旧
+    board = initialPlacementState.board.map(row => [...row]);
+    for (let row = 0; row < 7; row++) {
+        for (let col = 0; col < 9; col++) {
+            updateCellDisplay(row, col);
+        }
+    }
+
+    // ストレージ復旧
+    storageBoard = initialPlacementState.storageBoard.map(row => [...row]);
+    for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 9; col++) {
+            updateStorageCellDisplay(row, col);
+        }
+    }
+}
+
+
 // ボードクリア
 function clearBoard() {
     if (confirm('ボードをクリアしますか？')) {
@@ -1224,11 +1615,16 @@ function clearBoard() {
 document.addEventListener('DOMContentLoaded', function() {
     initializeBoard();
     initializePalette();
+    initializeStorage();
     initializeScoreControls();
+    initializePlacementControls(); // 追加
 
     // **ボタンイベントの追加**
     document.getElementById('simulateBtn').addEventListener('click', startSimulation);
     document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+
+    document.getElementById('suggestBtn').addEventListener('click', suggestPlacement);
+    document.getElementById('suggestResetBtn').addEventListener('click', resetToInitialState);
 
     updateStats();
 });

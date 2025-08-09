@@ -173,6 +173,38 @@
           pointer-events: none;
       }
 
+      .board-area {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 20px;
+      }
+
+      .storage-area {
+          background: #f0f8ff;
+          border: 2px solid #4682b4;
+          border-radius: 10px;
+          padding: 15px;
+      }
+
+      .storage-grid {
+          display: grid;
+          grid-template-columns: repeat(9, 60px); /* 9列 */
+          grid-template-rows: repeat(2, 60px);    /* 2行 */
+          gap: 2px;
+      }
+
+      .storage-cell {
+          width: 60px;
+          height: 60px;
+          background: #e6f3ff;
+          border: 1px solid #87ceeb;
+          /* board-cellと同じドロップ機能 */
+          display: flex;
+          align-items: center;
+          justify-content: center;
+      }
+
       .placed-piece {
           font-size: 40px;
           cursor: grab;
@@ -372,7 +404,7 @@
 
       .simulation-controls {
           text-align: center;
-          margin-top: 20px;
+          /* margin-top: 20px; */
           padding: 15px;
           background: #f8f9fa;
           border-radius: 10px;
@@ -388,6 +420,25 @@
           transition: background 0.3s;
       }
 
+      .placement-controls {
+          /* simulation-controlsと全く同じスタイル */
+          text-align: center;
+          margin-top: 20px;
+          padding: 15px;
+          background: #f8f9fa;
+          border-radius: 10px;
+      }
+
+      .placement-button {
+          /* sim-buttonと同じクラス名を使用 */
+          margin: 0 10px;
+          padding: 10px 20px;
+          font-size: 16px;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: background 0.3s;
+      }
     </style>
   </head>
   <body>
@@ -469,12 +520,16 @@
         </div>
 
 
-        <!-- 中央: チェスボード -->
-        <div class="chess-board">
-          <div class="board-grid" id="chessBoard">
-            <!-- ボードはJavaScriptで生成 -->
-          </div>
+        <!-- 中央: チェスボード + ストレージ -->
+        <div class="board-area">
 
+          <div class="chess-board">
+            <div class="board-grid" id="chessBoard"></div>
+          </div>
+          <div class="storage-area">
+            <h3>📦 ストレージ</h3>
+            <div class="storage-grid" id="storageArea"></div>
+          </div>
 
           <div class="simulation-controls">
             <button id="simulateBtn" class="sim-button">▶️ シミュレーション開始</button>
@@ -483,6 +538,12 @@
               <span id="currentTurn">手番: 白</span>
               <span id="battleCount">戦闘回数: 0</span>
             </div>
+          </div>
+
+          <div class="placement-controls">
+            <button id="suggestBtn" class="placement-button">🎯 配置提案(実験中)</button>
+            <button id="suggestResetBtn" class="placement-button">🔄 盤面リセット</button>
+            <!-- <button id="optimizeBtn" class="placement-button">⚡ 最適化</button> -->
           </div>
 
         </div>
